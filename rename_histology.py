@@ -479,7 +479,7 @@ if __name__ == "__main__":
     # Make sure that source directory is good
     img_files, excel_filename = check_src(src_dir)
 
-    # Make sure that destination directory is good
+    # Make sure that destination directory is good:
     check_dest(dest_dir)
 
     # Create a map between source image file and destination image file
