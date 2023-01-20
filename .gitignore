@@ -1,6 +1,10 @@
-# Ignored files
-venv/
+# emacs
 *~
-.ipynb_checkpoints/
+
+# macOS
 .DS_Store
+
+# Python
 __pycache__/
+.ipynb_checkpoints/
+venv/
