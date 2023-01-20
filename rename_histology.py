@@ -489,3 +489,8 @@ if __name__ == "__main__":
     copy_src_to_dest(src2dest, dest_dir)
 
     my_log("Done!")
+
+
+### TO-DO:
+# 1. Create "dest/HPAP-xxx/Histology/" structure
+# 2. Modify a few souce files, then copy them, and confirm that the dest files are identical.
