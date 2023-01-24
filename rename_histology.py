@@ -3,6 +3,16 @@
 """
 Copy and re-organize histology data in a new directory, whose structure
 is consistent with the filesystem hierarchy required by cloud storage.
+
+This script is based on:
+https://github.com/faryabiLab/hpap-apps/blob/master/data_curator_tools/psv_pipelines/psv_histology_upload.py
+
+TO-DO:
+------
+* Replace `pandas` module (which is harder to understand) with a simpler
+  Python module (such as `openpyxl`) when reading Excel file and matching
+  filenames.
+
 """
 
 import datetime
@@ -85,6 +95,8 @@ def check_src(src_dir):
     if num_img == 0:
         my_log(f"ERROR: no image file found in '{src_dir}'")
         sys.exit(1)
+
+    # dhu: Ensure that image filenames have identical donor IDs
 
     my_log(f"{num_img} image file(s) found in '{src_dir}'")
 
@@ -383,6 +395,8 @@ def map_src_to_dest(src_dir, img_files, excel_filename):
     )
 
     clean_histology['donor'] = clean_histology['polished_info'].apply(parse_donor)
+    # dhu: ensure that all donor IDs are identical
+
     clean_histology['anatomy'] = clean_histology['polished_info'].apply(parse_anatomy)
     clean_histology.drop('polished_info', axis=1, inplace=True)
     clean_histology['renamed_stain'] = clean_histology['stain'].apply(rename_stain)
@@ -493,4 +507,4 @@ if __name__ == "__main__":
 
 ### TO-DO:
 # 1. Create "dest/HPAP-xxx/Histology/" structure
-# 2. Modify a few souce files, then copy them, and confirm that the dest files are identical.
+# 2. Modify a few source files, then copy them, and confirm that the dest files are identical.

@@ -7,8 +7,7 @@ https://github.com/faryabiLab/hpap-hub/issues/116
 It copies "HPAP-*.tiff" files from a source directory to a target
 directory. Both the target directory's structure and tiff files' names
 are "normalized" (based on the information embedded in original tiff
-file's name) so that they can be uploaded into Pennsieve by
-`psv-upload.bash` command.
+file's name) so that they can be uploaded into cloudd storage as is.
 
 The legacy code in original Jupyter Notebook can be found at:
 `legacy/upload_imc.py`
@@ -91,11 +90,3 @@ donors = [x for x in os.listdir(abs_dest_dir) if x.startswith('HPAP-')]
 if len(donors) == 0:
     print(f"Valid IMC data not found in '{src_dir_arg}', exit")
     sys.exit(5)
-
-print("\nRun the following command(s) to upload your IMC data:")
-print("-----------------------------------------------------\n")
-for donor_id in donors:
-    donor_path = os.path.join(abs_dest_dir, donor_id)
-    print(f"psv-upload.bash '{donor_path}' '{donor_id}'")
-
-print()
