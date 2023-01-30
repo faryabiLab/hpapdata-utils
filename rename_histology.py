@@ -19,41 +19,8 @@ import sys
 import time
 
 import openpyxl
-import pandas as pd # dhu: delete it later
 
 IMG_FILE_EXTENSION = '.ndpi' # extension of image files
-
-unique_dict = dict()
-
-anatomy_dict = {
-    'pancreas': {
-        'unsure': 'Pancreas - Unsure of orientation',
-        'head': 'Head of pancreas',
-        'tail': 'Tail of pancreas',
-        'body': 'Body of pancreas'
-    },
-    'duodenum': {
-        'unsure': 'Duodenum - Unsure of orientation',
-        'distal': 'Duodenum - Distal one third',
-        'mid': 'Duodenum - Mid one third',
-        'proximal': 'Duodenum - Proximal one third',
-        'prox': 'Duodenum - Proximal one third'
-    },
-    'LN': {
-        'SMA': 'Lymph node - SMA',
-        'sma': 'Lymph node - SMA',
-        'body': 'Lymph node - Body of pancreas',
-        'head': 'Lymph node - Head of pancreas',
-        'mesentery': 'Lymph node - Mesentery',
-        'mesentary': 'Lymph node - Mesentery',
-        'mestentery': 'Lymph node - Mesentery',
-        'tail': 'Lymph node - Tail of pancreas'
-    },
-    'spleen': 'Spleen',
-    'thymus': 'Thymus',
-    'artery': 'Artery'
-}
-
 
 def my_log(message, with_time=True):
     """Print a log message, with a prefix of current time."""
@@ -203,17 +170,17 @@ def check_excel_filenames(rows, excel_filename):
     return donor_id
 
 
-def map_excel_columns(sheet_obj):
+def get_excel_columns(sheet_obj):
     """
     Read the first data row (not the one with column names) of input
-    Excel sheet object and return a map between column number in Excel
-    sheet and proper column name (which is NOT related to the column
-    name in Excel).
+    Excel sheet object, and return a pair of column numbers (integers),
+    the first is HPAP column's number in Excel file, the second is
+    'Prep' column's number in Excel file.
     """
 
     max_col = sheet_obj.max_column
-    col_num2name = dict()
 
+    hpap_col = prep_col = None
     for c in range(1, max_col + 1):
         cell_obj = sheet_obj.cell(row=2, column=c)
         cell_val = cell_obj.value
@@ -229,183 +196,37 @@ def map_excel_columns(sheet_obj):
         if len(lower_val) == 0:
             continue
 
-        if 'HPAP' in cell_val:
-            col_num2name[c] = 'filename_stem'
-            continue
+        if cell_val.startswith('HPAP'):
+            if hpap_col is None:
+                hpap_col = c
+                continue
+            else:
+                print(
+                    f"ERROR in Excel file: columns #{hpap_col} and #{c} of row "
+                    f"#2 both look like 'HPAP' column"
+                )
+                sys.exit(1)
 
         if 'oct' in lower_val or 'ffpe' in lower_val or 'vand' in lower_val:
-            col_num2name[c] = 'stain'
-            continue
-
-    return col_num2name
-
-
-def read_excel(filename, donor_id):
-    """
-    Read Excel spreadsheet, parse the data in each cell, and return a
-    dict, whose key is a "normalized" filename key, and whose value is
-    another dict of other columns.
-    """
-
-    # workbook and sheet objects
-    wb_obj = openpyxl.load_workbook(filename, read_only=True)
-    sheet_obj = wb_obj.active
-
-    col_num2name = map_excel_columns(sheet_obj)
-
-    # If `filename_stem` column is not found, print out an error and exit.
-    if 'filename_stem' not in col_num2name.values():
-        print(f"ERROR: HPAP column not found in '{filename}'")
-        sys.exit(1)
-
-    max_row = sheet_obj.max_row
-    max_col = sheet_obj.max_column
-
-    # Read the whole Excel file and create a dict, whose key is the value
-    # of `filename_stem`, and whose value is another dict of other columns.
-    rows = dict()
-    for r in range(2, max_row + 1):
-        current_row = dict()
-        for c in range(1, max_col + 1):
-            if c not in col_num2name:
+            if prep_col is None:
+                prep_col = c
                 continue
-            col_name = col_num2name[c]
-            cell_val = sheet_obj.cell(row=r, column=c).value.strip()
-            current_row[col_name] = cell_val
+            else:
+                print(
+                    f"ERROR in Excel file: columns #{hpap_col} and #{c} of row "
+                    f"#2 both look like 'Prep' column"
+                )
+                sys.exit(1)
 
-        filename_stem = current_row.get('filename_stem', '')
-        row_key = get_filename_key(filename_stem, rm_extension=False)
-        if len(row_key) == 0 or not row_key.startswith('HPAP'):
-            print(f"ERROR: invalid HPAP value on row #{r} of '{filename_stem}'")
-            sys.exit(1)
-
-        if row_key in rows:
-            print(f"ERROR: duplicate HPAP value on row #{r} of '{filename_stem}'")
-            sys.exit(1)
-
-        rows[row_key] = current_row
-
-    excel_donor_id = check_excel_filenames(rows, filename)
-    if excel_donor_id != donor_id:
-        print(
-            f"ERROR: donor ID in Excel ({excel_donor_id}) does not match "
-            f"the one in image files ({donor_id})"
-        )
+    if hpap_col is None:
+        print("ERROR in Excel file: 'HPAP' column not found")
         sys.exit(1)
 
-    return rows
-
-
-def match_excel_to_images(excel_dict, img_dict):
-    """
-    Match the data in Excel with actual image files.
-    If everything is good, return a another dict maps each image file to
-    a new filename (which will be saved in the destination directory.
-    """
-
-    # Ensure that each image file matches one row in Excel spreadsheet.
-    for ik, iv in img_dict.items():
-        if ik not in excel_dict():
-            print(f"ERROR: image file '{iv}' not match any row in Excel")
-            sys.exit(1)
-
-    # Ensure that each row in Excel matches one image file
-    src2dest = dict()
-    dest_key_counter = dict()
-    for xk, xv in excel_dict.items():
-        if xk not in img_dict():
-            cell_v = xv['filename_stem']
-            print(f"ERROR: '{cell_v}' not match any image files")
-            sys.exit(1)
-
-        anatomy = get_anatomy(xk)
-        short_anatomy = get_short_anatomy(anatomy)
-        excel_stain = xv['stain']
-        new_stain = rename_stain(excel_stain)
-        anatomy = anatomy.replace(" ", "-").str.replace("---", "-")
-        dest_key = "_".join(
-            [
-                f"HPAP-{donor_id}",
-                "Histology",
-                anatomy,
-                new_stain,
-                "H-and-E",
-            ]
-        )
-
-        counter = dest_key_counter.get(dest_key, 0)
-        uniq_num = counter + 1
-        dest_key_counter[dest_key] = uniq_num
-
-        dest_name = f"{dest_key}_{uniq_num}{IMG_FILE_EXTENSION}"
-        src_img_filename = img_dict[xk]
-
-        src2dest[src_img_filename] = {
-            'dir': short_anatomy,
-            'filename': dest_name,
-        }
-
-        return src2dest
-
-
-def get_anatomy(value):
-    pan = re.findall("(pancreas)\\s?-?\\s?(\\w+)", value)
-    spl = re.findall("(spleen)", value)
-    lyn = re.findall("(LN)\\s?-?\\s?(\\w+)?", value)
-    duo = re.findall("(duodenum)\\s?-?\\s?(\\w+)?|(duod)\\s?(\\w+)?", value)
-    thy = re.findall("(thymus)\\s?\n?", value)
-    art = re.findall("(artery)\\s?\n?", value)
-    rand = re.findall("(Mesentery opo)", value)
-
-    # Remove empty findall results
-    finds = [
-        x[0] for x in [pan, spl, lyn, duo, thy, art, rand] if len(x) > 0
-    ]
-
-    # Remove empty nested `findall` results
-    finds_final = []
-    for find in finds:
-        if type(find) == tuple:
-            for sub_find in find:
-                if len(sub_find) > 0:
-                    if sub_find == 'duod':
-                        sub_find = 'duodenum'
-                    finds_final.append(sub_find)
-        else:
-            finds_final.append(find)
-
-    # Ensure that either one or two keywords are found
-    num_keywords = len(finds_final)
-    if num_keywords == 0 or num_keywords > 2:
-        my_log(f"Number of keys not match in parse_anatomy(): {value}")
+    if hpap_col is None:
+        print("ERROR in Excel file: 'Prep' column not found")
         sys.exit(1)
 
-    # Ensure that the first keyword in anatomy_dict
-    key1 = finds_final[0]
-    if key1 not in anatomy_dict:
-        my_log(f"Key #1 not found in anatomy_dict: {key1}")
-        sys.exit(1)
-
-    # Only one keyword is found
-    if num_keywords == 1:
-        if key1 == 'pancreas':
-            return 'Pancreas'
-
-        if key1 == 'duodenum':
-            return 'Duodenum'
-
-        if key1 == 'LN':
-            return 'Lymph node'
-
-        return anatomy_dict[key1]
-
-    # Two keywords are found
-    key2 = finds_final[1]
-    try:
-        return anatomy_dict[key1][key2]
-    except KeyError:
-        my_log(f"ERROR: key #2 not found in anatomy_dict: {key2}")
-        sys.exit(1)
+    return hpap_col, prep_col
 
 
 def rename_stain(input_str):
@@ -419,181 +240,220 @@ def rename_stain(input_str):
 
     return input_str
 
+def read_excel(filename, donor_id):
+    """
+    Read Excel spreadsheet, parse the data in each cell, and return a
+    dict, whose key is a "normalized" filename key, and whose value is
+    another dict of other columns.
+    """
 
-def match_img_path(df_data, file_paths):
-    df_copy = df_data.copy()
+    # workbook and sheet objects
+    wb_obj = openpyxl.load_workbook(filename, read_only=True)
+    sheet_obj = wb_obj.active
+    hpap_col, prep_col = get_excel_columns(sheet_obj)
 
-    # Find each image file's stem (w/o extension and trailing whitespace chars)
-    filename_keys = [
-        get_filename_key(os.path.basename(fp).rsplit('.', 1)[0])
-        for fp in file_paths
-    ]
+    # Read the whole Excel file and create a dict, whose key is the value
+    # of `filename_stem`, and whose value is another dict of other columns.
+    max_row = sheet_obj.max_row
+    rows = dict()
+    for r in range(2, max_row + 1):
+        curr_row = dict()
+        hpap_col_val = sheet_obj.cell(row=r, column=hpap_col).value.strip()
+        row_key = get_filename_key(hpap_col_val, rm_extension=False)
+        if len(row_key) == 0 or not row_key.startswith('HPAP'):
+            print(f"ERROR: invalid HPAP value on row #{r} column #{hpap_col}")
+            sys.exit(1)
 
-    file_pairs = list(zip(filename_keys, file_paths))
+        if row_key in rows:
+            print(f"ERROR: duplicate HPAP value on row #{r} of '{filename_stem}'")
+            sys.exit(1)
 
-    if (df_copy['img_id'] == 'NA').all():
-        # New Excel format: all values in 'Image ID' column are blank
-        merge_col = 'filename_key'
-    else:
-        # OLD Excel format: values in 'Image ID' column are image files' name
-        # (without extension)
-        merge_col = 'img_id'
+        curr_row['filename_stem'] = hpap_col_val
 
-    file_pairs_df = pd.DataFrame(file_pairs, columns=[merge_col, 'filepath'])
-    return df_copy.merge(file_pairs_df, on=merge_col)
+        prep_col_val = sheet_obj.cell(row=r, column=prep_col).value.strip()
+        curr_row['stain'] = rename_stain(prep_col_val)
+        rows[row_key] = curr_row
+
+    excel_donor_id = check_excel_filenames(rows, filename)
+    if excel_donor_id != donor_id:
+        print(
+            f"ERROR: donor ID in Excel ({excel_donor_id}) does not match "
+            f"the one in image files ({donor_id})"
+        )
+        sys.exit(1)
+
+    return rows
 
 
-def get_short_anatomy(input_str):
-    anatomy_lower = input_str.lower()
+def search_pancreas(input_str):
+    re_matches = re.findall("(pancreas)\\s?-?\\s?(\\w+)", input_str)
+    if not re_matches:
+        return
 
-    if "artery" in anatomy_lower:
-        return "Artery"
+    re_matches = re_matches[0]
+    if len(re_matches) == 1:
+        return 'Pancreas', 'Pancreas'
 
-    if 'bone marrow' in anatomy_lower:
-        return "Bone Marrow"
+    if len(re_matches) == 2:
+        if re_matches[1] == 'unsure':
+            return 'Pancreas', 'Pancreas-Unsure-of-orientation',
 
-    if 'duodenum' in anatomy_lower:
-        return "Duodenum"
+        if re_matches[1] in ['head', 'body', 'tail']:
+            cap_str = re_matches[1].capitalize()
+            return 'Pancreas', f'{cap_str}-of-pancreas'
 
-    if 'lymph node' in anatomy_lower:
-        return "Lymph node"
 
-    if 'pancreas' in anatomy_lower:
-        return "Pancreas"
+def search_duodenum(input_str, needle):
+    re_matches = re.findall(f"({needle})\\s?-?\\s?(\\w+)", input_str)
+    if not re_matches:
+        return
 
-    if 'spleen' in anatomy_lower:
-        return "Spleen"
+    re_matches = re_matches[0]
+    if len(re_matches) == 1:
+        return 'Duodenum', 'Duodenum'
 
-    if 'thymus' in anatomy_lower:
-        return "Thymus"
+    if len(re_matches) == 2:
+        if re_matches[1] == 'unsure':
+            return 'Duodenum', 'Duodenum-Unsure-of-orientation'
 
-    my_log(f"get_short_anatomy_name(): no match for '{input_str}'")
+        if re_matches[1] in ['distal', 'mid', 'proximal']:
+            cap_str = re_matches[1].capitalize()
+            return 'Duodenum', f'Duodenum-{cap_str}-one-third'
+
+        if re_matches[1] == 'prox':
+            return 'Duodenum', 'Duodenum-Proximal-one-third'
+
+
+def search_lymph_node(input_str):
+    re_matches = re.findall("(ln)\\s?-?\\s?(\\w+)?", input_str)
+    if not re_matches:
+        return
+
+    re_matches = re_matches[0]
+    if len(re_matches) == 1:
+        return 'Lymph node', 'Lymph-node'
+
+    if len(re_matches) == 2:
+        if re_matches[1] == 'sma':
+            return 'Lymph node', 'Lymph-node-SMA'
+
+        if re_matches[1] in ['body', 'head', 'tail']:
+            cap_str = re_matches[1].capitalize()
+            return 'Lymph node', f'Lymph-node-{cap_str}-of-pancreas'
+
+        if re_matches[1] in ['mesentery', 'mesentary', 'mestentery']:
+            return 'Lymph node', 'Lymph-node-Mesentery'
+
+
+def get_anatomy_names(input_str):
+    """
+    Return a pair of strings, the first is short anatomy name (which will
+    be the parent directory's name), the second is long anatomy name
+    (which will be used in the new image file's name).
+    """
+
+    lower_str = input_str.lower()
+
+    if 'spleen' in lower_str:
+        return 'Spleen', 'Spleen'
+
+    if 'thymus' in lower_str:
+        return 'Thymus', 'Thymus'
+
+    if 'artery' in lower_str:
+        return 'Artery', 'Artery'
+
+    # Search 'pancreas'
+    search_result = search_pancreas(lower_str)
+    if search_result:
+        return search_result
+
+    # Search 'duodenum'
+    search_result = search_duodenum(lower_str, 'duodenum')
+    if search_result:
+        return search_result
+
+    # Search "duod"
+    search_result = search_duodenum(lower_str, 'duod')
+    if search_result:
+        return search_result
+
+    # Search 'ln' (lymph node)
+    search_result = search_lymph_node(lower_str)
+    if search_result:
+        return search_result
+
+    print(f"ERROR: valid anatomy name not found in '{input_str}'")
     sys.exit(1)
 
 
-def get_unique_num(input_str):
-    """Return a unique number identifier."""
-
-    tokens = input_str.split('_')
-    donor = tokens[0]
-    anatomy = tokens[2]
-    stain = tokens[3]
-
-    if donor not in unique_dict.keys():
-        unique_dict[donor] = dict()
-
-    if anatomy not in unique_dict[donor].keys():
-        unique_dict[donor][anatomy] = dict()
-
-    if stain not in unique_dict[donor][anatomy].keys():
-        unique_dict[donor][anatomy][stain] = 1
-        return unique_dict[donor][anatomy][stain]
-
-    unique_dict[donor][anatomy][stain] += 1
-
-    return unique_dict[donor][anatomy][stain]
-
-
-def map_src_to_dest(src_dir, img_files, excel_filename):
+def map_excel_to_images(excel_dict, img_dict):
     """
-    Map each source image file to a new filename that will be uploaded
-    to the cloud storage.
+    Match the data in Excel with actual image files.
+    If everything is good, return a another dict maps each image file's
+    path to a destination file's name.
     """
 
-    # Read Excel file
-    excel_data = read_excel(excel_filename)
+    # Ensure that each image file matches one row in Excel spreadsheet.
+    for ik, iv in img_dict.items():
+        if ik not in excel_dict:
+            print(f"ERROR: image file '{iv}' not match any row in Excel")
+            sys.exit(1)
 
-    # Add new columns to match each row in Excel with an image file:
-    clean_histology['filename_key'] = clean_histology['raw_info'].apply(
-        get_filename_key
-    )
+    # Ensure that each row in Excel matches one image file
+    src2dest = dict()
+    dest_key_counter = dict()
+    for xk, xv in excel_dict.items():
+        cell_v = xv['filename_stem']
+        if xk not in img_dict:
+            print(f"ERROR: '{cell_v}' not match any image files")
+            sys.exit(1)
 
-    clean_histology['polished_info'] = clean_histology['raw_info'].apply(
-        get_polished_info
-    )
-
-    clean_histology['donor'] = clean_histology['polished_info'].apply(parse_donor)
-    # dhu: ensure that all donor IDs are identical
-
-    clean_histology['anatomy'] = clean_histology['polished_info'].apply(parse_anatomy)
-    clean_histology.drop('polished_info', axis=1, inplace=True)
-    clean_histology['renamed_stain'] = clean_histology['stain'].apply(rename_stain)
-
-    my_log("Map image filenames ...")
-
-    img_paths = [
-        os.path.abspath(src_dir + "/" + x) for x in img_files
-    ]
-    clean_histology = match_img_path(clean_histology, img_paths)
-
-    # Ensure that there's at least one row in `clean_histology` table:
-    if clean_histology.shape[0] == 0:
-        my_log("ERROR: matched image files not found")
-        sys.exit(1)
-
-    # Ensure that each image file in `src_dir` matches ONE AND ONLY ONE
-    # row in Excel:
-    img_set = set(img_files)
-    excel_set = {os.path.basename(f) for f in clean_histology['filepath']}
-    if img_set > excel_set:
-        unmatched = sorted(img_set - excel_set)
-        my_log(
-            f"ERROR: {len(unmatched)} image file(s) in '{src_dir}' can not be "
-            f"matched with '{excel_files[0]}':"
+        short_anatomy, long_anatomy = get_anatomy_names(cell_v)
+        stain = xv['stain']
+        dest_key = "_".join(
+            [
+                f"HPAP-{donor_id}",
+                "Histology",
+                long_anatomy,
+                stain,
+                "H-and-E",
+            ]
         )
-        for idx, f in enumerate(unmatched, start=1):
-            my_log(f"  ({idx}) '{f}'", with_time=False)
-        sys.exit(1)
 
-    # Create a new column for short anatomy name
-    clean_histology['short_anatomy'] = clean_histology['anatomy'].apply(
-        get_short_anatomy
-    )
+        counter = dest_key_counter.get(dest_key, 0)
+        uniq_num = counter + 1
+        dest_key_counter[dest_key] = uniq_num
 
-    clean_histology['dest_name'] = (
-        clean_histology['donor'].astype(str) + "_Histology_" +
-        clean_histology['anatomy'].str.replace(" ", "-").str.replace("---", "-") +
-        "_" + clean_histology["renamed_stain"] + "_H-and-E"
-    )
+        dest_name = f"{dest_key}_{uniq_num}{IMG_FILE_EXTENSION}"
 
-    clean_histology.sort_values(
-        ['anatomy', 'renamed_stain', 'img_id'], inplace=True
-    )
-
-    clean_histology['unique_num'] = clean_histology['dest_name'].apply(
-        get_unique_num
-    ).astype(str)
-
-    clean_histology['dest_name'] = (
-        clean_histology['dest_name'] + '_' + clean_histology['unique_num'] +
-        IMG_FILE_EXTENSION
-    )
-
-    src2dest = clean_histology[
-        ['filepath', 'short_anatomy', 'dest_name']
-    ].sort_values(['filepath']).to_dict('list')
+        src_name = img_dict[xk]
+        src2dest[src_name] = {
+            'sub_dir': short_anatomy,
+            'name': dest_name,
+        }
 
     return src2dest
 
 
-def copy_src_to_dest(src2dest, dest_dir):
+def copy_src_to_dest(src_dir, dest_dir, donor_id, src2dest):
     """Copy source image files to the destination directory."""
 
     os.makedirs(dest_dir, exist_ok=True)
 
-    src_paths = src2dest['filepath']
-    anatomies = src2dest['short_anatomy']
-    dest_names = src2dest['dest_name']
+    for src_name, dest_dict in src2dest.items():
+        src_path = os.path.join(src_dir, src_name)
+        sub_dir = dest_dict['sub_dir']
+        dest_parent = os.path.join(
+            dest_dir, f'HPAP-{donor_id}', 'Histology', sub_dir
+        )
 
-    for idx, src in enumerate(src_paths):
-        dest_basename = dest_names[idx]
-        parent_dir = os.path.join(dest_dir, anatomies[idx])
-        os.makedirs(parent_dir, exist_ok=True)
-        dest_path = os.path.join(parent_dir, dest_basename)
+        os.makedirs(dest_parent, exist_ok=True)
+        dest_name = dest_dict['name']
+        dest_path = os.path.join(dest_parent, dest_name)
 
-        my_log(f"Copying '{src}' ...")
-        shutil.copy(src, dest_path)
-
+        my_log(f"Copying '{src_name}' ...")
+        shutil.copy(src_path, dest_path)
 
 # ============================ Main program ==================================
 
@@ -609,33 +469,19 @@ if __name__ == "__main__":
     dest_dir = args[2]
 
     # Make sure that source directory is good
-    donor_id, fn_map, excel_filename = check_src(src_dir)
+    donor_id, img_filenames, excel_filename = check_src(src_dir)
 
-    rows = read_excel(excel_filename, donor_id)
+    excel_rows = read_excel(excel_filename, donor_id)
 
     #import json; print(json.dumps(rows, indent=2)); sys.exit(0)  # dhu test
-    for x in fn_map:
-        if x not in rows:
-            print(x)
-
-    for x in rows:
-        if x not in fn_map:
-            print(x)
-
-    sys.exit(0)
 
     # Make sure that destination directory is good:
     check_dest(dest_dir)
 
     # Create a map between source image file and destination image file
-    src2dest = map_src_to_dest(src_dir, img_files, excel_filename)
+    src2dest = map_excel_to_images(excel_rows, img_filenames)
 
     # Copy image files from source to destination
-    copy_src_to_dest(src2dest, dest_dir)
+    copy_src_to_dest(src_dir, dest_dir, donor_id, src2dest)
 
     my_log("Done!")
-
-
-### TO-DO:
-# 1. Create "dest/HPAP-xxx/Histology/" structure
-# 2. Modify a few source files, then copy them, and confirm that the dest files are identical.
