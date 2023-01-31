@@ -10,5 +10,19 @@ This repository includes some utilities to handle `hpapdata`.
 1. Python 3.7+
 
 2. `requirements.txt`
-   `requirements.txt` can be installed by `pip install -r requirements.txt` in a
-   Python virtual environment.
+
+### Setup
+
+Run the following commands before running any Python scripts in this repository:
+
+```shell
+# Create a Python virtual environment
+python3 -m venv venv-hpapdata-utils
+
+# Activate the virtual environment
+source venv-hpapdata-utils/bin/activate
+
+# Install required packages
+cd <path>/hpapdata-utils
+pip install -r requirements.txt
+```

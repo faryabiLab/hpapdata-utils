@@ -8,8 +8,8 @@ This script is based on:
 https://github.com/faryabiLab/hpap-apps/blob/master/data_curator_tools/psv_pipelines/psv_histology_upload.py
 
 The original version uses Pandas to parse the Excel file and match image
-files. It was an overkill and made the code harder to understand, so
-`pandas` was replaced by `openpyxl` when Excel file was read in.
+files. It was an overkill and made the code harder to understand.  The
+current version replaces `pandas` with `openpyxl`.
 """
 
 import os
@@ -45,10 +45,6 @@ def get_filename_key(input_filename, rm_extension):
     for c in input_filename:
         if c == '_' or c == '-' or c.isalpha() or c.isdigit():
             filename_key += c
-
-    if len(filename_key) == 0 or not filename_key.startswith('HPAP'):
-        my_log("ERROR: invalid filename '{input_filename}'")
-        sys.exit(1)
 
     return filename_key
 
@@ -164,7 +160,10 @@ def check_excel_filenames(rows, excel_filename):
             donor_id = current_donor_id
         elif donor_id != current_donor_id:
             excel_val = v['filename_stem']
-            print("ERROR: inconsistent donor ID in '{excel_val}' of '{excel_filename}'")
+            print(
+                f"ERROR: inconsistent donor ID in '{excel_val}' of "
+                f"'{excel_filename}'"
+            )
             sys.exit(1)
 
     return donor_id
@@ -178,23 +177,12 @@ def get_excel_columns(sheet_obj):
     'Prep' column's number in Excel file.
     """
 
-    max_col = sheet_obj.max_column
-
     hpap_col = prep_col = None
+    max_col = sheet_obj.max_column
     for c in range(1, max_col + 1):
         cell_obj = sheet_obj.cell(row=2, column=c)
-        cell_val = cell_obj.value
-
-        # If a column's value is empty or not a string, skip it.
-        if cell_val is None or not isinstance(cell_val, str):
-            continue
-
-        cell_val = cell_val.strip()
+        cell_val = str(cell_obj.value).strip()
         lower_val = cell_val.lower()
-
-        # Skip columns that includes whitespace characters only
-        if len(lower_val) == 0:
-            continue
 
         if cell_val.startswith('HPAP'):
             if hpap_col is None:
@@ -207,7 +195,7 @@ def get_excel_columns(sheet_obj):
                 )
                 sys.exit(1)
 
-        if 'oct' in lower_val or 'ffpe' in lower_val or 'vand' in lower_val:
+        elif 'oct' in lower_val or 'ffpe' in lower_val or 'vand' in lower_val:
             if prep_col is None:
                 prep_col = c
                 continue
@@ -239,6 +227,7 @@ def rename_stain(input_str):
         return 'OCT-lightly-fixed'
 
     return input_str
+
 
 def read_excel(filename, donor_id):
     """
@@ -285,16 +274,19 @@ def read_excel(filename, donor_id):
     return rows
 
 
-def search_pancreas(input_str):
-    re_matches = re.findall("(pancreas)\\s?-?\\s?(\\w+)", input_str)
-    if not re_matches:
-        return
+def regex_find(needle, input_str):
+    pattern = f"({needle})\\s?-?\\s?(\\w+)"
+    re_matches = re.findall(pattern, input_str)
+    if re_matches:
+        return re_matches[0]
 
-    re_matches = re_matches[0]
-    if len(re_matches) == 1:
+
+def search_pancreas(input_str):
+    re_matches = regex_find("pancreas", input_str)
+    if re_matches and len(re_matches) == 1:
         return 'Pancreas', 'Pancreas'
 
-    if len(re_matches) == 2:
+    if re_matches and len(re_matches) == 2:
         if re_matches[1] == 'unsure':
             return 'Pancreas', 'Pancreas-Unsure-of-orientation',
 
@@ -303,16 +295,12 @@ def search_pancreas(input_str):
             return 'Pancreas', f'{cap_str}-of-pancreas'
 
 
-def search_duodenum(input_str, needle):
-    re_matches = re.findall(f"({needle})\\s?-?\\s?(\\w+)", input_str)
-    if not re_matches:
-        return
-
-    re_matches = re_matches[0]
-    if len(re_matches) == 1:
+def search_duodenum(needle, input_str):
+    re_matches = regex_find(needle, input_str)
+    if re_matches and len(re_matches) == 1:
         return 'Duodenum', 'Duodenum'
 
-    if len(re_matches) == 2:
+    if re_matches and len(re_matches) == 2:
         if re_matches[1] == 'unsure':
             return 'Duodenum', 'Duodenum-Unsure-of-orientation'
 
@@ -325,15 +313,11 @@ def search_duodenum(input_str, needle):
 
 
 def search_lymph_node(input_str):
-    re_matches = re.findall("(ln)\\s?-?\\s?(\\w+)?", input_str)
-    if not re_matches:
-        return
-
-    re_matches = re_matches[0]
-    if len(re_matches) == 1:
+    re_matches = regex_find("ln", input_str)
+    if re_matches and len(re_matches) == 1:
         return 'Lymph node', 'Lymph-node'
 
-    if len(re_matches) == 2:
+    if re_matches and len(re_matches) == 2:
         if re_matches[1] == 'sma':
             return 'Lymph node', 'Lymph-node-SMA'
 
@@ -369,12 +353,12 @@ def get_anatomy_names(input_str):
         return search_result
 
     # Search 'duodenum'
-    search_result = search_duodenum(lower_str, 'duodenum')
+    search_result = search_duodenum('duodenum', lower_str)
     if search_result:
         return search_result
 
     # Search "duod"
-    search_result = search_duodenum(lower_str, 'duod')
+    search_result = search_duodenum('duod', lower_str)
     if search_result:
         return search_result
 
@@ -455,6 +439,7 @@ def copy_src_to_dest(src_dir, dest_dir, donor_id, src2dest):
         my_log(f"Copying '{src_name}' ...")
         shutil.copy(src_path, dest_path)
 
+
 # ============================ Main program ==================================
 
 if __name__ == "__main__":
@@ -471,9 +456,8 @@ if __name__ == "__main__":
     # Make sure that source directory is good
     donor_id, img_filenames, excel_filename = check_src(src_dir)
 
+    # Read Excel file
     excel_rows = read_excel(excel_filename, donor_id)
-
-    #import json; print(json.dumps(rows, indent=2)); sys.exit(0)  # dhu test
 
     # Make sure that destination directory is good:
     check_dest(dest_dir)
