@@ -32,7 +32,7 @@ pip install -r requirements.txt
 * See HPAP documentations at:
   https://github.com/faryabiLab/hpap-hub#1-hpap-documentation
 
-* Most of HPAP back-end and front-end source code is hosted at:
+* HPAP back-end and front-end source code is hosted at:
   https://github.com/faryabiLab/hpap
 
 * To add new HPAP issues, go to: https://github.com/faryabiLab/hpap-hub/issues
