@@ -73,12 +73,14 @@ for src_dir, _, files, in os.walk(abs_src_dir):
             region
         )
 
+        # Original suffixes
+        suffixes = tokens[-1].split('.', 1)[1]
+
         dest_name = "_".join(
             [donor_id, "IMC", anatomy, region, overlay, conjugate]
-        ) + ".tiff"
+        ) + f".{suffixes}"
 
         os.makedirs(dest_dir, exist_ok=True)
-
         src_path = os.path.join(src_dir, src_name)
         dest_path = os.path.join(dest_dir, dest_name)
 
