@@ -283,6 +283,7 @@ def read_excel(filename, donor_id):
 def regex_find(needle, input_str):
     pattern = f"({needle})\\s?-?\\s?(\\w+)?"
     re_matches = re.findall(pattern, input_str)
+
     if re_matches:
         return re_matches[0]
 
