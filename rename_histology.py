@@ -247,7 +247,13 @@ def read_excel(filename, donor_id):
     rows = dict()
     for r in range(2, max_row + 1):
         curr_row = dict()
-        hpap_col_val = sheet_obj.cell(row=r, column=hpap_col).value.strip()
+        hpap_col_val = sheet_obj.cell(row=r, column=hpap_col).value
+
+        # Skip the row if its value in HPAP column is empty:
+        if not hpap_col_val:
+            continue
+
+        hpap_col_val = hpap_col_val.strip()
         row_key = get_filename_key(hpap_col_val, rm_extension=False)
         if len(row_key) == 0 or not row_key.startswith('HPAP'):
             print(f"ERROR: invalid HPAP value on row #{r} column #{hpap_col}")
@@ -275,7 +281,7 @@ def read_excel(filename, donor_id):
 
 
 def regex_find(needle, input_str):
-    pattern = f"({needle})\\s?-?\\s?(\\w+)"
+    pattern = f"({needle})\\s?-?\\s?(\\w+)?"
     re_matches = re.findall(pattern, input_str)
     if re_matches:
         return re_matches[0]
@@ -283,50 +289,60 @@ def regex_find(needle, input_str):
 
 def search_pancreas(input_str):
     re_matches = regex_find("pancreas", input_str)
-    if re_matches and len(re_matches) == 1:
+
+    if not re_matches or len(re_matches) != 2:
+        return
+
+    if not re_matches[1]:
         return 'Pancreas', 'Pancreas'
 
-    if re_matches and len(re_matches) == 2:
-        if re_matches[1] == 'unsure':
-            return 'Pancreas', 'Pancreas-Unsure-of-orientation',
+    if re_matches[1] == 'unsure':
+        return 'Pancreas', 'Pancreas-Unsure-of-orientation',
 
-        if re_matches[1] in ['head', 'body', 'tail']:
-            cap_str = re_matches[1].capitalize()
-            return 'Pancreas', f'{cap_str}-of-pancreas'
+    if re_matches[1] in ['head', 'body', 'tail']:
+        cap_str = re_matches[1].capitalize()
+        return 'Pancreas', f'{cap_str}-of-pancreas'
 
 
 def search_duodenum(needle, input_str):
     re_matches = regex_find(needle, input_str)
-    if re_matches and len(re_matches) == 1:
+
+    if not re_matches or len(re_matches) != 2:
+        return
+
+    if not re_matches[1]:
         return 'Duodenum', 'Duodenum'
 
-    if re_matches and len(re_matches) == 2:
-        if re_matches[1] == 'unsure':
-            return 'Duodenum', 'Duodenum-Unsure-of-orientation'
+    if re_matches[1] == 'unsure':
+        return 'Duodenum', 'Duodenum-Unsure-of-orientation'
 
-        if re_matches[1] in ['distal', 'mid', 'proximal']:
-            cap_str = re_matches[1].capitalize()
-            return 'Duodenum', f'Duodenum-{cap_str}-one-third'
 
-        if re_matches[1] == 'prox':
-            return 'Duodenum', 'Duodenum-Proximal-one-third'
+    if re_matches[1] == 'prox':
+        return 'Duodenum', 'Duodenum-Proximal-one-third'
+
+    if re_matches[1] in ['distal', 'mid', 'proximal']:
+        cap_str = re_matches[1].capitalize()
+        return 'Duodenum', f'Duodenum-{cap_str}-one-third'
 
 
 def search_lymph_node(input_str):
     re_matches = regex_find("ln", input_str)
-    if re_matches and len(re_matches) == 1:
+
+    if not re_matches or len(re_matches) != 2:
+        return
+
+    if not re_matches[1]:
         return 'Lymph node', 'Lymph-node'
 
-    if re_matches and len(re_matches) == 2:
-        if re_matches[1] == 'sma':
-            return 'Lymph node', 'Lymph-node-SMA'
+    if re_matches[1] == 'sma':
+        return 'Lymph node', 'Lymph-node-SMA'
 
-        if re_matches[1] in ['body', 'head', 'tail']:
-            cap_str = re_matches[1].capitalize()
-            return 'Lymph node', f'Lymph-node-{cap_str}-of-pancreas'
+    if re_matches[1] in ['body', 'head', 'tail']:
+        cap_str = re_matches[1].capitalize()
+        return 'Lymph node', f'Lymph-node-{cap_str}-of-pancreas'
 
-        if re_matches[1] in ['mesentery', 'mesentary', 'mestentery']:
-            return 'Lymph node', 'Lymph-node-Mesentery'
+    if re_matches[1] in ['mesentery', 'mesentary', 'mestentery']:
+        return 'Lymph node', 'Lymph-node-Mesentery'
 
 
 def get_anatomy_names(input_str):
