@@ -260,7 +260,7 @@ def read_excel(filename, donor_id):
             sys.exit(1)
 
         if row_key in rows:
-            print(f"ERROR: duplicate HPAP value on row #{r} of '{filename_stem}'")
+            print(f"ERROR: duplicate HPAP value on row #{r} of '{filename}'")
             sys.exit(1)
 
         curr_row['filename_stem'] = hpap_col_val
