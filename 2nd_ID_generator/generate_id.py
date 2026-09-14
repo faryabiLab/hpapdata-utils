@@ -3,7 +3,7 @@
 HPAP 2nd ID Generator
 
 Computes the "2nd ID" for a donor from the pancreas cross-clamp time and
-logs the entry into HPAP_2nd_ID_Log.xlsx.
+logs the entry into HPAP_2nd_ID_Log.csv.
 
 2nd ID format: YY + M + DD + HH  (all from the cross-clamp time, local time)
   YY = 2-digit year
@@ -14,17 +14,16 @@ logs the entry into HPAP_2nd_ID_Log.xlsx.
 Run it with:  python3 generate_id.py
 """
 
+import csv
 import datetime
 import re
 from pathlib import Path
 
-import openpyxl
-from openpyxl.styles import Font
-from openpyxl.utils import get_column_letter
-
-LOG_FILE = Path(__file__).parent / "HPAP_2nd_ID_Log.xlsx"
-SHEET_NAME = "2nd-ID Log"
-HEADERS = ["HPAP_ID", "UNOS#", "cross_clamp_time", "time_zone", "disease_status", "notes", "2nd_ID"]
+LOG_FILE = Path(__file__).parent / "HPAP_2nd_ID_Log.csv"
+HEADERS = [
+    "HPAP_ID", "UNOS#", "cross_clamp_time", "time_zone",
+    "disease_status", "notes", "2nd_ID",
+]
 
 MONTH_CODE = {
     1: "J", 2: "F", 3: "M", 4: "A", 5: "Y", 6: "U",
@@ -65,45 +64,45 @@ def compute_second_id(dt):
     return f"{dt.year % 100:02d}{MONTH_CODE[dt.month]}{dt.day:02d}{dt.hour:02d}"
 
 
-def load_or_create_log():
-    if LOG_FILE.exists():
-        wb = openpyxl.load_workbook(LOG_FILE)
-        ws = wb[SHEET_NAME]
-    else:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = SHEET_NAME
-        for col, header in enumerate(HEADERS, start=1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = Font(bold=True)
-        for col in range(1, len(HEADERS) + 1):
-            ws.column_dimensions[get_column_letter(col)].width = 20
-    return wb, ws
+def load_log_rows():
+    """Return existing log rows as a list of dicts, or [] if none yet."""
+    if not LOG_FILE.exists():
+        return []
+    with open(LOG_FILE, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
 
-def existing_hpap_ids(ws):
-    ids = set()
-    for row in ws.iter_rows(min_row=2, max_col=1, values_only=True):
-        if row[0]:
-            ids.add(str(row[0]).strip())
-    return ids
+def existing_hpap_ids(rows):
+    return {r["HPAP_ID"].strip() for r in rows if r.get("HPAP_ID")}
 
 
-def suggest_next_hpap_id(ws):
+def suggest_next_hpap_id(rows):
     max_num = 0
-    for row in ws.iter_rows(min_row=2, max_col=1, values_only=True):
-        hpap_id = row[0]
+    for r in rows:
+        hpap_id = r.get("HPAP_ID")
         if hpap_id:
-            m = re.match(r"HPAP0*(\d+)", str(hpap_id).strip(), re.IGNORECASE)
+            m = re.match(r"HPAP0*(\d+)", hpap_id.strip(), re.IGNORECASE)
             if m:
                 max_num = max(max_num, int(m.group(1)))
     return f"HPAP{max_num + 1:03d}" if max_num else "HPAP001"
 
 
-def append_entry(ws, hpap_id, unos, crossclamp_dt, timezone, disease_status, notes, second_id):
-    row = [hpap_id, unos, crossclamp_dt, timezone, disease_status, notes, second_id]
-    ws.append(row)
-    ws.cell(row=ws.max_row, column=3).number_format = "m/d/yy h:mm"
+def append_entry(hpap_id, unos, crossclamp_dt, timezone, disease_status,
+                  notes, second_id):
+    is_new = not LOG_FILE.exists()
+    with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=HEADERS)
+        if is_new:
+            writer.writeheader()
+        writer.writerow({
+            "HPAP_ID": hpap_id,
+            "UNOS#": unos,
+            "cross_clamp_time": crossclamp_dt.strftime("%m/%d/%y %H:%M"),
+            "time_zone": timezone,
+            "disease_status": disease_status,
+            "notes": notes,
+            "2nd_ID": second_id,
+        })
 
 
 def prompt(label, default=None, required=True):
@@ -122,11 +121,11 @@ def main():
     print("HPAP 2nd ID Generator")
     print("=" * 50)
 
-    wb, ws = load_or_create_log()
-    ids_seen = existing_hpap_ids(ws)
+    rows = load_log_rows()
+    ids_seen = existing_hpap_ids(rows)
 
     while True:
-        default_id = suggest_next_hpap_id(ws)
+        default_id = suggest_next_hpap_id(rows)
         while True:
             hpap_id = prompt("HPAP_ID", default=default_id)
             if hpap_id in ids_seen:
@@ -152,8 +151,17 @@ def main():
         notes = prompt("Notes", required=False)
 
         second_id = compute_second_id(cc_dt)
-        append_entry(ws, hpap_id, unos, cc_dt, timezone, disease_status, notes, second_id)
-        wb.save(LOG_FILE)
+        append_entry(hpap_id, unos, cc_dt, timezone, disease_status, notes,
+                     second_id)
+        rows.append({
+            "HPAP_ID": hpap_id,
+            "UNOS#": unos,
+            "cross_clamp_time": cc_dt.strftime("%m/%d/%y %H:%M"),
+            "time_zone": timezone,
+            "disease_status": disease_status,
+            "notes": notes,
+            "2nd_ID": second_id,
+        })
         ids_seen.add(hpap_id)
 
         print(f"\n  2nd ID: {second_id}")
