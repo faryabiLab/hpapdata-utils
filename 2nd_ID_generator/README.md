@@ -49,29 +49,8 @@ exist.
 
 ## How to run it
 
-### Option 1: `run.sh` (recommended, no setup required)
-
-From Terminal:
-
 ```bash
 cd 2nd_ID_generator
-./run.sh
-```
-
-The first time you run it, this script creates a local virtual environment
-(`.venv`) in this folder to keep the tool isolated from your system Python —
-it won't touch your system Python or any other project. On later runs it just
-launches the tool. This works no matter what Python setup you already have.
-
-You can also double-click `run.sh` from Finder if your Mac is set up to run
-`.sh` files directly.
-
-### Option 2: run the script directly
-
-If you already have Python 3 installed (or are working in an IDE like VS Code,
-PyCharm, etc.):
-
-```bash
 python3 generate_id.py
 ```
 
@@ -100,9 +79,7 @@ After each entry, the computed 2nd ID is printed and the row is saved to
 
 ## Files
 
-| File                  | Purpose                                                       |
-| --------------------- | ------------------------------------------------------------- |
-| `generate_id.py`      | The main script                                               |
-| `run.sh`              | Self-contained launcher (sets up its own virtual environment) |
-| `requirements.txt`    | Python dependencies (currently none)                          |
-| `HPAP_2nd_ID_Log.csv` | The log of all generated entries                              |
+| File                  | Purpose                           |
+| --------------------- | ---------------------------------- |
+| `generate_id.py`      | The main script                    |
+| `HPAP_2nd_ID_Log.csv` | The log of all generated entries   |
