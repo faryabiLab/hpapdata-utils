@@ -11,5 +11,16 @@ venv/
 .venv/
 venv-hpapdata-utils/
 
+# R
+.RData
+.Rhistory
+.Rproj.user/
+
 # Temp output files:
 2nd_ID_generator/HPAP_2nd_ID_Log.csv
+
+# calculate_perifusion data and generated files:
+calculate_perifusion/perifusion_input_files/
+calculate_perifusion/perifusion_output_files/
+calculate_perifusion/*.xlsx
+calculate_perifusion/*.sql
