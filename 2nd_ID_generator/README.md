@@ -37,8 +37,8 @@ avoid collisions (e.g. Jan/Jun/Jul all start with J):
 
 ### Logging
 
-Each entry (HPAP_ID, UNOS#, cross-clamp time, time zone, disease status, notes,
-and the computed 2nd ID) is appended as a row to `HPAP_2nd_ID_Log.csv` in this
+Each entry (_ID, UNOS#, cross-clamp time, time zone, disease status, notes,
+and the computed 2nd ID) is appended as a row to `_2nd_ID_Log.csv` in this
 folder. The file is created automatically on first run if it doesn't already
 exist.
 
@@ -59,7 +59,7 @@ python3 generate_id.py
 Once running, it will prompt you for each field:
 
 ```
-HPAP_ID [HPAP217]:
+HPAP_ID [HPAP-217]:
 UNOS#:
 Cross clamp time, local (e.g. 8/20/2026 14:30):
 Time zone (e.g. EST):
